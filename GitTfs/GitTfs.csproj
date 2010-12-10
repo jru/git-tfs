@@ -82,6 +82,7 @@
     <Compile Include="Commands\QuickFetch.cs" />
     <Compile Include="Commands\RemoteOptions.cs" />
     <Compile Include="Commands\Shelve.cs" />
+    <Compile Include="Commands\Unshelve.cs" />
     <Compile Include="Core\Changes\Git\Add.cs" />
     <Compile Include="Core\Changes\Git\Delete.cs" />
     <Compile Include="Core\Changes\Git\Modify.cs" />

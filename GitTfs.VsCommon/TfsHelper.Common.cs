@@ -7,6 +7,7 @@ using Microsoft.TeamFoundation.Server;
 using Microsoft.TeamFoundation.VersionControl.Client;
 using Microsoft.TeamFoundation.WorkItemTracking.Client;
 using SEP.Extensions;
+using Sep.Git.Tfs.Commands;
 using Sep.Git.Tfs.Core;
 using Sep.Git.Tfs.Core.TfsInterop;
 using StructureMap;
@@ -118,6 +119,23 @@ namespace Sep.Git.Tfs.VsCommon
         {
             var matchingShelvesets = VersionControl.QueryShelvesets(shelvesetName, VersionControl.AuthenticatedUser);
             return matchingShelvesets != null && matchingShelvesets.Length > 0;
+        }
+
+        public void Unshelve(Sep.Git.Tfs.Commands.Unshelve unshelve, IList<string> args)
+        {
+            if(unshelve.List)
+            {
+                var user = unshelve.Owner == "all" ? null : (unshelve.Owner ?? VersionControl.AuthenticatedUser);
+                var shelvesets = VersionControl.QueryShelvesets(null, user);
+                foreach(var shelveset in shelvesets)
+                {
+                    _stdout.WriteLine("  {0,-20} {1,-20}", shelveset.OwnerName, shelveset.Name);
+                }
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
         }
 
         public IShelveset CreateShelveset(IWorkspace workspace, string shelvesetName)

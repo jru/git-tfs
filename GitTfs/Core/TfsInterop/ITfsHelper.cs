@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Sep.Git.Tfs.Commands;
 
 namespace Sep.Git.Tfs.Core.TfsInterop
 {
@@ -17,5 +18,6 @@ namespace Sep.Git.Tfs.Core.TfsInterop
         IChangeset GetChangeset(int changesetId);
         bool MatchesUrl(string tfsUrl);
         bool HasShelveset(string shelvesetName);
+        void Unshelve(Unshelve unshelve, IList<string> args);
     }
 }
