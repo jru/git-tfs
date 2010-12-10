@@ -5,6 +5,7 @@ namespace Sep.Git.Tfs.Core
 {
     public interface IGitRepository : IGitHelpers
     {
+        string GitDir { get; set; }
         IEnumerable<IGitTfsRemote> ReadAllTfsRemotes();
         IGitTfsRemote ReadTfsRemote(string remoteId);
         IGitTfsRemote ReadTfsRemote(string tfsUrl, string tfsRepositoryPath);

@@ -24,7 +24,7 @@ namespace Sep.Git.Tfs.Core
             _repository = new Repository(new DirectoryInfo(gitDir));
         }
 
-        private string GitDir { get; set; }
+        public string GitDir { get; set; }
         public string WorkingCopyPath { get; set; }
         public string WorkingCopySubdir { get; set; }
 
