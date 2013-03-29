@@ -337,15 +337,16 @@ namespace Sep.Git.Tfs.Core
             }
         }
 
-        private LogEntry Apply(string lastCommit, ITfsChangeset changeset)
+        private LogEntry Apply(string parent, ITfsChangeset changeset)
         {
             LogEntry result = null;
             WithTemporaryIndex(() => Tfs.WithWorkspace(WorkingDirectory, this, changeset.Summary, workspace =>
             {
-                GitIndexInfo.Do(Repository, index => result = changeset.Apply(lastCommit, index, workspace));
+                Repository.CommandOneline("read-tree", parent);
+                GitIndexInfo.Do(Repository, index => result = changeset.Apply(parent, index, workspace));
                 result.Tree = Repository.CommandOneline("write-tree");
             }));
-            if(!String.IsNullOrEmpty(lastCommit)) result.CommitParents.Add(lastCommit);
+            if (!String.IsNullOrEmpty(parent)) result.CommitParents.Add(parent);
             return result;
         }
 
