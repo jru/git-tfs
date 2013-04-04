@@ -203,7 +203,7 @@ namespace Sep.Git.Tfs.Core
                     }
                 }
                 var commitSha = Commit(log);
-                UpdateRef(commitSha, changeset.Summary.ChangesetId);
+                UpdateTfsHead(commitSha, changeset.Summary.ChangesetId);
                 if(changeset.Summary.Workitems.Any())
                 {
                     string workitemNote = "Workitems:\n";
@@ -217,11 +217,10 @@ namespace Sep.Git.Tfs.Core
             }
         }
 
-        public void Apply(ITfsChangeset changeset, string destinationRef)
+        private string CommitChangeset(ITfsChangeset changeset, string parent)
         {
-            var log = Apply(MaxCommitHash, changeset);
-            var commit = Commit(log);
-            Repository.CommandNoisy("update-ref", destinationRef, commit);
+            var log = Apply(parent, changeset);
+            return Commit(log);
         }
 
         public void QuickFetch()
@@ -240,7 +239,7 @@ namespace Sep.Git.Tfs.Core
         {
             AssertTemporaryIndexEmpty();
             var log = CopyTree(MaxCommitHash, changeset);
-            UpdateRef(Commit(log), changeset.Summary.ChangesetId);
+            UpdateTfsHead(Commit(log), changeset.Summary.ChangesetId);
             DoGcIfNeeded();
         }
 
@@ -258,14 +257,20 @@ namespace Sep.Git.Tfs.Core
             return Tfs.GetChangeset((int)changesetId, this);
         }
 
-        public void UpdateRef(string commitHash, long changesetId)
+        public void UpdateTfsHead(string commitHash, long changesetId)
         {
             MaxCommitHash = commitHash;
             MaxChangesetId = changesetId;
-            Repository.CommandNoisy("update-ref", "-m", "C" + MaxChangesetId, RemoteRef, MaxCommitHash);
+            string changesetName = "C" + MaxChangesetId;
+            UpdateRef(RemoteRef, MaxCommitHash, changesetName);
             if (Autotag)
-                Repository.CommandNoisy("update-ref", TagPrefix + "C" + MaxChangesetId, MaxCommitHash);
+                UpdateRef(TagPrefix + changesetName, MaxCommitHash, "Autotag " + changesetName);
             LogCurrentMapping();
+        }
+
+        private void UpdateRef(string name, string commitHash, string reason)
+        {
+            Repository.CommandNoisy("update-ref", "-m", reason, name, commitHash);
         }
 
         private void LogCurrentMapping()
@@ -473,8 +478,10 @@ namespace Sep.Git.Tfs.Core
             var destinationRef = "refs/heads/" + destinationBranch;
             if(Repository.HasRef(destinationRef))
                 throw new GitTfsException("ERROR: Destination branch (" + destinationBranch + ") already exists!");
+
             var shelvesetChangeset = Tfs.GetShelvesetData(this, shelvesetOwner, shelvesetName);
-            Apply(shelvesetChangeset, destinationRef);
+            var commit = CommitChangeset(shelvesetChangeset, MaxCommitHash);
+            UpdateRef(destinationRef, commit, "Shelveset " + shelvesetName + " from " + shelvesetOwner);
         }
 
         public void Shelve(string shelvesetName, string head, TfsChangesetInfo parentChangeset, bool evaluateCheckinPolicies)
