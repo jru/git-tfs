@@ -5,8 +5,8 @@ namespace Sep.Git.Tfs.Core
     public interface ITfsChangeset
     {
         TfsChangesetInfo Summary { get; }
-        LogEntry Apply(string lastCommit, GitIndexInfo index, ITfsWorkspace workspace);
-        LogEntry CopyTree(GitIndexInfo index, ITfsWorkspace workspace);
+        GitCommitBuilder Apply(IGitRepository repository, string lastCommit, ITfsWorkspace workspace);
+        GitCommitBuilder CopyTree(IGitRepository repo, ITfsWorkspace workspace);
 
         /// <summary>
         /// Get all items (files and folders) in the source TFS repository.

@@ -22,10 +22,10 @@ namespace Sep.Git.Tfs.Core
         IEnumerable<TfsChangesetInfo> GetLastParentTfsCommits(string head, bool includeStubRemotes);
         TfsChangesetInfo GetCurrentTfsCommit();
         IDictionary<string, GitObject> GetObjects(string commit);
-        string HashAndInsertObject(string filename);
         IEnumerable<IGitChangedFile> GetChangedFiles(string from, string to);
         bool WorkingCopyHasUnstagedOrUncommitedChanges { get; }
         void CopyBlob(string sha, string outputFile);
+        string CreateTree(TreeDefinition treeDef);
         GitCommit GetCommit(string commitish);
         Dictionary<string, GitObject> GetObjects();
         string GetCommitMessage(string head, string parentCommitish);

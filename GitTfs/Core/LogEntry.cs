@@ -11,7 +11,7 @@ namespace Sep.Git.Tfs.Core
         }
 
         public string AuthorName { get; set; }
-        public string Tree { get; set; }
+//        public string Tree { get; set; }
 
         public IList<string> CommitParents { get; private set; }
 

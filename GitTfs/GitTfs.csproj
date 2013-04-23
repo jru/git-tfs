@@ -228,7 +228,7 @@
     <Compile Include="Core\Ext.cs" />
     <Compile Include="Core\GitCommandException.cs" />
     <Compile Include="Core\GitHelpers.cs" />
-    <Compile Include="Core\GitIndexInfo.cs" />
+    <Compile Include="Core\GitCommitBuilder.cs" />
     <Compile Include="Core\GitRepository.cs" />
     <Compile Include="Core\GitTfsRemote.cs" />
     <Compile Include="Core\IGitHelpers.cs" />

@@ -201,17 +201,20 @@ namespace Sep.Git.Tfs.Core
         {
             foreach (var changeset in FetchChangesets())
             {
-                AssertTemporaryIndexClean(MaxCommitHash);
-                var log = Apply(MaxCommitHash, changeset);
+                var commitInfo = Apply(MaxCommitHash, changeset);
+
+                var parents = new List<string>();
+
+                if (!String.IsNullOrEmpty(MaxCommitHash))
+                    parents.Add(MaxCommitHash);
+
                 if (changeset.Summary.ChangesetId == mergeChangesetId)
-                {
-                    foreach (var parent in parentCommitsHashes)
-                    {
-                        log.CommitParents.Add(parent);
-                    }
-                }
-                var commitSha = Commit(log);
+                    parents.Append(parentCommitsHashes);
+
+                var commitSha = Commit(commitInfo, parents.ToArray());
+
                 UpdateRef(commitSha, changeset.Summary.ChangesetId);
+
                 if(changeset.Summary.Workitems.Any())
                 {
                     string workitemNote = "Workitems:\n";
@@ -219,6 +222,7 @@ namespace Sep.Git.Tfs.Core
                     {
                         workitemNote += String.Format("[{0}] {1}\n    {2}\n", workitem.Id, workitem.Title, workitem.Url);
                     }
+                    LogEntry log = commitInfo.LogEntry;
                     Repository.CreateNote(commitSha, workitemNote, log.AuthorName, log.AuthorEmail, log.Date);
                 }
                 DoGcIfNeeded();
@@ -227,9 +231,9 @@ namespace Sep.Git.Tfs.Core
 
         public void Apply(ITfsChangeset changeset, string destinationRef)
         {
-            var log = Apply(MaxCommitHash, changeset);
-            var commit = Commit(log);
-            Repository.CommandNoisy("update-ref", destinationRef, commit);
+            var commitInfo = Apply(MaxCommitHash, changeset);
+            var hash = Commit(commitInfo, new string[]{MaxCommitHash});
+            Repository.CommandNoisy("update-ref", destinationRef, hash);
         }
 
         public void QuickFetch()
@@ -246,9 +250,8 @@ namespace Sep.Git.Tfs.Core
 
         private void quickFetch(ITfsChangeset changeset)
         {
-            AssertTemporaryIndexEmpty();
-            var log = CopyTree(MaxCommitHash, changeset);
-            UpdateRef(Commit(log), changeset.Summary.ChangesetId);
+            var commitInfo = CopyTree(changeset);
+            UpdateRef(Commit(commitInfo, new string[] {MaxCommitHash}), changeset.Summary.ChangesetId);
             DoGcIfNeeded();
         }
 
@@ -309,74 +312,34 @@ namespace Sep.Git.Tfs.Core
             }
         }
 
-        private void AssertTemporaryIndexClean(string treeish)
+        private GitCommitBuilder Apply(string lastCommit, ITfsChangeset changeset)
         {
-            if (string.IsNullOrEmpty(treeish))
+            GitCommitBuilder commit = null;
+            WithWorkspace(changeset.Summary, workspace =>
             {
-                AssertTemporaryIndexEmpty();
-                return;
-            }
-            WithTemporaryIndex(() => AssertIndexClean(treeish));
+                commit = changeset.Apply(Repository, lastCommit, workspace);
+            });
+            return commit;
         }
 
-        private void AssertTemporaryIndexEmpty()
+        private GitCommitBuilder CopyTree(ITfsChangeset changeset)
         {
-            if (File.Exists(IndexFile))
-                File.Delete(IndexFile);
+            GitCommitBuilder commit = null;
+            WithWorkspace(changeset.Summary, workspace => {
+                commit = changeset.CopyTree(Repository, workspace);
+            });
+            return commit;
         }
 
-        private void AssertIndexClean(string treeish)
-        {
-            if (!File.Exists(IndexFile)) Repository.CommandNoisy("read-tree", treeish);
-            var currentTree = Repository.CommandOneline("write-tree");
-            var expectedCommitInfo = Repository.Command("cat-file", "commit", treeish);
-            var expectedCommitTree = treeShaRegex.Match(expectedCommitInfo).Groups[1].Value;
-            if (expectedCommitTree != currentTree)
-            {
-                Trace.WriteLine("Index mismatch: " + expectedCommitTree + " != " + currentTree);
-                Trace.WriteLine("rereading " + treeish);
-                File.Delete(IndexFile);
-                Repository.CommandNoisy("read-tree", treeish);
-                currentTree = Repository.CommandOneline("write-tree");
-                if (expectedCommitTree != currentTree)
-                {
-                    throw new Exception("Unable to create a clean temporary index: trees (" + treeish + ") " + expectedCommitTree + " != " + currentTree);
-                }
-            }
-        }
-
-        private LogEntry Apply(string lastCommit, ITfsChangeset changeset)
-        {
-            LogEntry result = null;
-            WithTemporaryIndex(() => WithWorkspace(changeset.Summary, workspace =>
-            {
-                GitIndexInfo.Do(Repository, index => result = changeset.Apply(lastCommit, index, workspace));
-                result.Tree = Repository.CommandOneline("write-tree");
-            }));
-            if(!String.IsNullOrEmpty(lastCommit)) result.CommitParents.Add(lastCommit);
-            return result;
-        }
-
-        private LogEntry CopyTree(string lastCommit, ITfsChangeset changeset)
-        {
-            LogEntry result = null;
-            WithTemporaryIndex(() => WithWorkspace(changeset.Summary, workspace => {
-                GitIndexInfo.Do(Repository, index => result = changeset.CopyTree(index, workspace));
-                result.Tree = Repository.CommandOneline("write-tree");
-            }));
-            if (!String.IsNullOrEmpty(lastCommit)) result.CommitParents.Add(lastCommit);
-            return result;
-        }
-
-        private string Commit(LogEntry logEntry)
+        private string Commit(GitCommitBuilder commit, string[] parents)
         {
             string commitHash = null;
-            WithCommitHeaderEnv(logEntry, () => commitHash = WriteCommit(logEntry));
+            WithCommitHeaderEnv(commit.LogEntry, () => commitHash = WriteCommit(commit, parents));
             // TODO (maybe): StoreChangesetMetadata(commitInfo);
             return commitHash;
         }
 
-        private string WriteCommit(LogEntry logEntry)
+        private string WriteCommit(GitCommitBuilder commit, string[] parents)
         {
             // TODO (maybe): encode logEntry.Log according to 'git config --get i18n.commitencoding', if specified
             //var commitEncoding = Repository.CommandOneline("config", "i18n.commitencoding");
@@ -384,33 +347,25 @@ namespace Sep.Git.Tfs.Core
             string commitHash = null;
             Repository.CommandInputOutputPipe((procIn, procOut) =>
                                                   {
-                                                      procIn.WriteLine(logEntry.Log);
+                                                      procIn.WriteLine(commit.LogEntry.Log);
                                                       procIn.WriteLine(GitTfsConstants.TfsCommitInfoFormat, TfsUrl,
-                                                                       TfsRepositoryPath, logEntry.ChangesetId);
+                                                                       TfsRepositoryPath, commit.LogEntry.ChangesetId);
                                                       procIn.Close();
                                                       commitHash = ParseCommitInfo(procOut.ReadToEnd());
-                                                  }, BuildCommitCommand(logEntry));
+                                                  }, BuildCommitCommand(commit, parents));
             return commitHash;
         }
 
-        private string[] BuildCommitCommand(LogEntry logEntry)
+        private string[] BuildCommitCommand(GitCommitBuilder commit, string[] parents)
         {
-            var tree = logEntry.Tree ?? GetTemporaryIndexTreeSha();
-            tree.AssertValidSha();
-            var commitCommand = new List<string> { "commit-tree", tree };
-            foreach (var parent in logEntry.CommitParents)
+            commit.Tree.AssertValidSha();
+            var commitCommand = new List<string> { "commit-tree", commit.Tree };
+            foreach (var parent in parents)
             {
                 commitCommand.Add("-p");
                 commitCommand.Add(parent);
             }
             return commitCommand.ToArray();
-        }
-
-        private string GetTemporaryIndexTreeSha()
-        {
-            string tree = null;
-            WithTemporaryIndex(() => tree = Repository.CommandOneline("write-tree"));
-            return tree;
         }
 
         private string ParseCommitInfo(string commitTreeOutput)
@@ -436,15 +391,6 @@ namespace Sep.Git.Tfs.Core
                                                      {"GIT_COMMITTER_NAME", logEntry.CommitterName ?? logEntry.AuthorName},
                                                      {"GIT_COMMITTER_EMAIL", logEntry.CommitterEmail ?? logEntry.AuthorEmail}
                                                  });
-        }
-
-        private void WithTemporaryIndex(Action action)
-        {
-            WithTemporaryEnvironment(() =>
-                                         {
-                                             Directory.CreateDirectory(Path.GetDirectoryName(IndexFile));
-                                             action();
-                                         }, new Dictionary<string, string> { { "GIT_INDEX_FILE", IndexFile } });
         }
 
         private void WithTemporaryEnvironment(Action action, IDictionary<string, string> newEnvironment)

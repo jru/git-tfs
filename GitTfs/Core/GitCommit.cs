@@ -15,7 +15,12 @@ namespace Sep.Git.Tfs.Core
             _commit = commit;
         }
 
-        public IEnumerable<GitTreeEntry> GetTree()
+        public Tree Tree
+        {
+            get { return _commit.Tree; }
+        }
+
+        public IEnumerable<GitTreeEntry> GetTreeEntries()
         {
             var treesToDescend = new Queue<Tree>(new[] {_commit.Tree});
             while(treesToDescend.Any())

@@ -20,6 +20,7 @@ namespace Sep.Git.Tfs.Core
         private IDictionary<string, IGitTfsRemote> _cachedRemotes;
         private Repository _repository;
         private RemoteConfigConverter _remoteConfigReader;
+        private string _tempIndexPath;
 
         public GitRepository(TextWriter stdout, string gitDir, IContainer container, Globals globals, RemoteConfigConverter remoteConfigReader)
             : base(stdout, container)
@@ -27,14 +28,18 @@ namespace Sep.Git.Tfs.Core
             _container = container;
             _globals = globals;
             GitDir = gitDir;
-            _repository = new LibGit2Sharp.Repository(GitDir);
+            _tempIndexPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+            _repository = new LibGit2Sharp.Repository(GitDir, new RepositoryOptions { IndexPath = _tempIndexPath });
             _remoteConfigReader = remoteConfigReader;
         }
 
         ~GitRepository()
         {
             if (_repository != null)
+            {
                 _repository.Dispose();
+            }
+            File.Delete(_tempIndexPath);
         }
 
         public string GitDir { get; set; }
@@ -222,6 +227,11 @@ namespace Sep.Git.Tfs.Core
                 // UpdateRef sets tag with TFS changeset id on each commit so we can't just update to latest
                 remote.UpdateRef(cs.GitCommit, cs.ChangesetId);
             }
+        }
+
+        public string CreateTree(TreeDefinition treeDef)
+        {
+            return _repository.ObjectDatabase.CreateTree(treeDef).Sha;
         }
 
         public GitCommit GetCommit(string commitish)
@@ -419,11 +429,6 @@ namespace Sep.Git.Tfs.Core
                 using (Stream stream = blob.ContentStream)
                 using (var outstream = File.Create(destination.FullName))
                         stream.CopyTo(outstream);
-        }
-
-        public string HashAndInsertObject(string filename)
-        {
-            return _repository.ObjectDatabase.CreateBlob(filename).Id.Sha;
         }
 
         public string AssertValidBranchName(string gitBranchName)
