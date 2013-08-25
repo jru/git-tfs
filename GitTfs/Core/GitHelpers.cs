@@ -157,13 +157,20 @@ namespace Sep.Git.Tfs.Core
             }
         }
 
+        private StreamWriter PrepareWriter(StreamWriter writer)
+        {
+            var prepared = writer.WithEncoding(_encoding);
+            prepared.NewLine = "\r\n";
+            return prepared;
+        }
+
         public void CommandInputPipe(Action<TextWriter> action, params string[] command)
         {
             Time(command, () =>
                               {
                                   AssertValidCommand(command);
                                   var process = Start(command, RedirectStdin);
-                                  action(process.StandardInput.WithEncoding(_encoding));
+                                  action(PrepareWriter(process.StandardInput));
                                   Close(process);
                               });
         }
@@ -174,7 +181,7 @@ namespace Sep.Git.Tfs.Core
                               {
                                   AssertValidCommand(command);
                                   var process = Start(command, Ext.And<ProcessStartInfo>(RedirectStdin, RedirectStdout));
-                                  interact(process.StandardInput.WithEncoding(_encoding), process.StandardOutput);
+                                  interact(PrepareWriter(process.StandardInput), process.StandardOutput);
                                   Close(process);
                               });
         }
